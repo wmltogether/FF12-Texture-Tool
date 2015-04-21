@@ -286,7 +286,8 @@ def PNG2TIM(fn):
     if '.tm2' in fn.lower():
         image_fldr = 'img'
         src_fldr = 'iso'
-        o_file_name , image_ext , id0 , id1 , im_type , palette_type = fn.split('.')[:6]
+        o_file_name = '.tm2'.join(fn.split('.tm2')[:-1])
+        id0 , id1 , im_type , palette_type = fn.split('.tm2')[-1].split('.')[1:5]
         id0 = int(id0)
         id1 = int(id1)
         dst = image_fldr+r'//%s'%o_file_name
