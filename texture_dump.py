@@ -1,3 +1,4 @@
+ # -*- coding: utf-8 -*-
 import struct,os
 from cStringIO import StringIO
 from GIDecode import *
@@ -5,6 +6,61 @@ from PIL import Image
 from EFX_plugin import efx2tim
 import glob
 import shutil
+def setSpecialPalette16():
+    Palette_list = [(0,0,0,0) , \
+                    (0,0,0,17), \
+                    (0,0,0,35), \
+                    (0,0,0,67), \
+                    (0,0,0,103), \
+                    (0,0,0,137), \
+                    (0,0,0,173), \
+                    (0,0,0,199), \
+                    (4,4,4,245), \
+                    (9,9,9,221), \
+                    (60,60,60,245), \
+                    (107,107,107,249), \
+                    (132,132,132,251), \
+                    (168,168,168,253), \
+                    (191,191,191,255), \
+                    (227,227,227,255)]
+    return Palette_list
+def setSpecialPalette161():
+    Palette_list = [(0,0,0,0) , \
+                    (0,0,0,17), \
+                    (0,0,0,35), \
+                    (0,0,0,67), \
+                    (0,0,0,103), \
+                    (0,0,0,137), \
+                    (0,0,0,173), \
+                    (0,0,0,199), \
+                    (4,4,4,245), \
+                    (9,9,9,221), \
+                    (60,60,60,245), \
+                    (107,107,107,249), \
+                    (132,132,132,251), \
+                    (168,168,168,253), \
+                    (191,191,191,255), \
+                    (227,227,227,255)]
+    
+    return Palette_list
+def setSpecialPalette16_red():
+    Palette_list = [(0,0,0,0) , \
+                    (0,0,0,17), \
+                    (0,0,0,35), \
+                    (0,0,0,67), \
+                    (0,0,0,103), \
+                    (0,0,0,137), \
+                    (0,0,0,173), \
+                    (0,0,0,199), \
+                    (4,4,4,245), \
+                    (9,9,9,221), \
+                    (60,60,60,245), \
+                    (107,107,107,249), \
+                    (132,132,132,251), \
+                    (168,168,168,253), \
+                    (191,191,191,255), \
+                    (227,227,227,255)]
+    return Palette_list 
 def dir_fn(adr):
     dirlst=[]
     for root,dirs,files in os.walk(adr):
@@ -44,11 +100,15 @@ def forceGetTIM2pos(fn):
         data = fp.read(0x8)
         if data[:4] == '\x54\x49\x4D\x32':
             print('get tim2')
+            ver, = struct.unpack('H' , data[4:6])
             im_nums, = struct.unpack('H' , data[6:8])
             fp.seek(8,1)
             full_tim_size = 0
             for i in range(im_nums):
                 tim_size = struct.unpack('I' , fp.read(4))[0]
+                if ver == 0x104:
+                    fp.seek(0x70 - 4,1)
+                    tim_size = struct.unpack('I' , fp.read(4))[0] + 0x70
 
                 full_tim_size += tim_size
                 fp.seek(tim_size-4 , 1)
@@ -79,6 +139,7 @@ def getEFX_extinfo(efx_buffer):
                 palette_size = 0x400
                 palette_color_nums = 256
                 if (texture_size > 0) and (texture_size == (0x400 + 0x20 + width * height)) :
+                    
                     palette_data = efx_buffer.read(palette_size)
                     data_pos = efx_buffer.tell()
                     image_data = efx_buffer.read(width * height)
@@ -96,7 +157,8 @@ def getEFX_extinfo(efx_buffer):
                 im_type = '4BPP'
                 palette_size = 0x40
                 palette_color_nums = 16
-                if (texture_size > 0) and (texture_size == (0x40 + 0x20 + width * height /2)) :
+                if (texture_size > 0) and (texture_size == (0x40 + 0x20 + width * height )) :
+                    print('get 4bpp settings')
                     palette_data = efx_buffer.read(palette_size)
                     data_pos = efx_buffer.tell()
                     image_data = efx_buffer.read(width * height)
@@ -121,6 +183,7 @@ def getPNG_extinfo(fn):
     return (width , height ,im)
     
 def getTIM2_extinfo(tim_buffer):
+    tim_buffer.seek(0,0)
     TIM2_MAGIC = tim_buffer.read(4)
     tim_info_list = []
     if TIM2_MAGIC == 'TIM2':
@@ -129,7 +192,9 @@ def getTIM2_extinfo(tim_buffer):
         for i in xrange(im_nums):
             im_type = ''
             palette_type = ''
-            tim_size , palette_size , data_size   = struct.unpack('3I' , tim_buffer.read(12))
+            if ver == 0x104:
+                tim_buffer.seek(0x80)
+            tim_size , palette_size , data_size = struct.unpack('3I' , tim_buffer.read(12))
             header_size , palette_color_nums = struct.unpack('2H' , tim_buffer.read(4))
             fourCC = struct.unpack('>4B' , tim_buffer.read(4))
             if (fourCC[2] , fourCC[3]) == (0 , 1):#16BPP
@@ -152,7 +217,7 @@ def getTIM2_extinfo(tim_buffer):
                 im_type = '4BPP'
                 palette_type = 'C32'
                 if palette_size == 0:
-                    palette_type = 'L4'                
+                    palette_type = 'L4' 
             elif (fourCC[2] , fourCC[3]) == (1 , 5):#8BPP
                 im_type = '8BPP'
                 palette_type = 'C16'
@@ -193,6 +258,7 @@ def TEX2PNG(fn):
     fp = open(fn , 'rb')
     for i in xrange(len(tim_pos_list)):
         (tim_pos , tim_size) = tim_pos_list[i]
+        print(hex(tim_pos),hex(tim_size))
         fp.seek(tim_pos)
         tim_buffer = StringIO()
         tim_data = fp.read(tim_size)
@@ -218,7 +284,9 @@ def TEX2PNG(fn):
                                               0x80 , 4 , False , 0 )   
             if palette_type == 'L4':
                 palette_list = setAlphaPalette16()
-                
+                if "7_D5" in fn:
+                    palette_list = setSpecialPalette16()
+                    palette_type = 'S4'
             if palette_type == 'L8':
                 palette_list = setAlphaPalette256()
             
@@ -253,6 +321,7 @@ def TEX2PNG(fn):
 def EFX2PNG(fn):
     efx_pos_list = forceGetEFXpos(fn)
     fp = open(fn , 'rb')
+    
     for i in xrange(len(efx_pos_list)):
         (efx_pos , efx_size) = efx_pos_list[i]
         fp.seek(efx_pos)
@@ -265,6 +334,8 @@ def EFX2PNG(fn):
             im_type , palette_color_nums , \
                 m_width , m_height , data_pos , image_data , \
                 palette_data = efx_info_list[j]
+            print(im_type , palette_color_nums , \
+                  m_width , m_height , data_pos)
             if im_type == '8BPP':
                 image_data = efx2tim(m_width , m_height, image_data, 'EFX2TIM')
                 palette_list = getPaletteData(palette_data , \
@@ -279,6 +350,28 @@ def EFX2PNG(fn):
                 im.putdata(tuple(pixel_list))
                 im.save('png\\%s.efx.%d.%d.%s.png'%(fn[4:] , i , j ,
                                                    im_type))
+            if im_type == '4BPP':
+                image_data = forceDec4bppto8bpp(image_data)
+                print(hex(len(image_data)))
+                image_data = efx2tim(m_width , m_height*2, image_data, 'EFX2TIM')
+                test = open('png\\%s.efx.%d.%d.%s.dat'%(fn[4:] , i , j ,im_type) , 'wb')
+                test.write(image_data)
+                test.write(palette_data)
+                test.close()
+                #image_data = efx2tim(m_width , m_height, image_data[:m_width * m_height], 'EFX2TIM')
+                palette_list = getPaletteData(palette_data , \
+                                              0x80 , 4 , False , 0 )
+                #palette_list = tile_pal(palette_list, 8 , 2)
+                pixel_list = paint_4BPP(m_width, m_height, m_width, m_height, 
+                                       image_data, 
+                                       palette_list, 
+                                       'BIG', 
+                                       'PS2')
+                im = Image.new('RGBA', (m_width, m_height))
+                im.putdata(tuple(pixel_list))
+                im.save('png\\%s.efx.%d.%d.%s.png'%(fn[4:] , i , j ,
+                                                   im_type))
+                
             
         
 def PNG2TIM(fn):
@@ -326,7 +419,8 @@ def PNG2TIM(fn):
                                               0x80 , 4 , False , 0 )   
         if palette_type == 'L4':
                 palette_list = setAlphaPalette16()
-                
+        if palette_type == 'S4':
+                palette_list =setSpecialPalette16()       
         if palette_type == 'L8':
                 palette_list = setAlphaPalette256()
         (width , height ,im) = getPNG_extinfo(fn)
@@ -421,7 +515,7 @@ def test():
     fp.close()
 def atest():
     if not os.path.exists('png'):
-        os.mkdirs('png')
+        os.makedirs('png')
     fl = dir_fn('iso')
     for fn in fl:
         fp = open(fn , 'rb')
@@ -446,16 +540,21 @@ def ctest():
     print('ok')
 def dtest():
     if not os.path.exists('png'):
-        os.mkdirs('png')
+        os.makedirs('png')
     fl = dir_fn('iso')
     for fn in fl:
         print(u'读取文件：%s'%fn)
         TEX2PNG(fn)
 def etest():
     if not os.path.exists('png'):
-        os.mkdirs('png')
+        os.makedirs('png')
     fl=glob.iglob(r'cnpng/*.png')
     for fn in fl:
         fn = fn.split("\\")[-1]
         print(u'读取文件：%s'%fn)
         PNG2TIM(fn)
+
+def font_ex():
+    TEX2PNG('c.tm2')
+def font_im():
+    TEX2PNG('c.tm2')
